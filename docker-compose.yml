@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  # --- SERVICIO 1: Base de Datos PostgreSQL ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: app_log_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app_log_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- SERVICIO 2: Base de Datos Redis (Blacklist / Cache) ---
+  redis:
+    image: redis:7-alpine
+    container_name: app_log_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- SERVICIO 3: Aplicación FastAPI ---
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app_log_api
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Sobrescribimos los hosts para apuntar a los contenedores internos
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

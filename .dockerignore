@@ -1,0 +1,21 @@
+# Entorno virtual local
+venv/
+.venv/
+env/
+
+# Cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Control de versiones y configuraciones locales
+.git/
+.gitignore
+.env
+.vscode/
+.idea/
+
+# Documentación o archivos temporales
+construccion.txt
+*.log

@@ -1,0 +1,27 @@
+# --- ARCHIVOS DE CONTROL Y NOTAS ---
+construccion.txt
+
+# --- VARIABLES DE ENTORNO Y SECRETOS (CRÍTICO) ---
+.env
+.env.*
+!.env.example
+
+# --- ENTORNO VIRTUAL ---
+venv/
+.venv/
+env/
+
+# --- ARCHIVOS DE REGISTRO Y LOGS ---
+*.log
+logs/
+
+# --- CACHE DE PYTHON Y PRUEBAS ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# --- CONFIGURACIONES DE EDITORES / IDE ---
+.vscode/
+.idea/
