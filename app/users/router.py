@@ -1,8 +1,7 @@
 """
 Módulo de Endpoints HTTP para el Dominio de Usuarios.
 
-Define las rutas para el CRUD de usuarios y delega
-la persistencia al módulo user_service.
+Define las rutas para la administración y gestión CRUD de usuarios.
 """
 
 from typing import Any, Sequence
@@ -17,10 +16,11 @@ from app.users.schemas import (
     UserUpdateAdmin,
 )
 
-# Definimos el router propio de este dominio
+# Router propio para el dominio de usuarios (Gestión/Administración)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
+# --- 1. ENDPOINT: REGISTRAR USUARIO (Administración) ---
 @router.post(
     "/",
     response_model=UserResponse,
@@ -32,8 +32,8 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """
-    Recibe los datos de registro (email, password, full_name),
-    verifica que el correo no exista y guarda el nuevo usuario.
+    Recibe los datos de registro (email, password, full_name), verifica que el
+    correo no exista y guarda el nuevo usuario.
     """
     existing_user = await user_service.get_by_email(db, email=user_in.email)
     if existing_user:
@@ -45,6 +45,7 @@ async def create_user(
     return await user_service.create_user(db, user_in=user_in)
 
 
+# --- 2. ENDPOINT: LISTAR USUARIOS PAGINADOS ---
 @router.get(
     "/",
     response_model=list[UserResponse],
@@ -61,6 +62,7 @@ async def read_users(
     return await user_service.get_multi(db, skip=skip, limit=limit)
 
 
+# --- 3. ENDPOINT: OBTENER USUARIO POR ID ---
 @router.get(
     "/{user_id}",
     response_model=UserResponse,
@@ -80,6 +82,7 @@ async def read_user_by_id(
     return user
 
 
+# --- 4. ENDPOINT: ACTUALIZAR USUARIO POR ID ---
 @router.patch(
     "/{user_id}",
     response_model=UserResponse,

@@ -69,3 +69,5 @@ class TokenPayload(BaseModel):
 
     sub: str | None = None  # Subject: Guarda el ID del usuario en formato String (ej: "12")
     exp: int | None = None  # Expiration: Timestamp UNIX en el que caduca el token
+
+

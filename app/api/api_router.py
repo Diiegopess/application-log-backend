@@ -6,6 +6,7 @@ Importa y centraliza los routers de cada dominio.
 
 from fastapi import APIRouter
 from app.users.router import router as users_router
+from app.auth.router import router as auth_router  
 
 # Router principal
 api_router = APIRouter()

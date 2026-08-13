@@ -77,4 +77,16 @@ class UserResponse(UserBase):
 
     # Configuración de Pydantic v2
     # from_attributes=True permite que Pydantic lea directamente las instancias de modelos de SQLAlchemy.
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True) 
+
+    # --- 6. ESQUEMA PARA ACTUALIZACIÓN POR PARTE DE UN ADMINISTRADOR ---
+class UserUpdateAdmin(UserUpdate):
+    """
+    Esquema extendido para que los administradores puedan actualizar 
+    roles o permisos privilegiados como 'is_superuser'.
+    """
+
+    is_superuser: bool | None = Field(
+        default=None, 
+        description="Permite otorgar o revocar permisos de superusuario"
+    )

@@ -1,8 +1,8 @@
 """
 Módulo de Routers HTTP para el Dominio de Autenticación.
 
-Expone las rutas públicas para inicio de sesión (Local y Google OAuth 2.0)
-y la ruta protegida para el cierre de sesión (Logout con Redis).
+Expone las rutas públicas para inicio de sesión (Local y Google OAuth 2.0),
+la consulta de la sesión activa (/me) y el cierre de sesión (Logout con Redis).
 """
 
 from typing import Any
@@ -15,6 +15,11 @@ from app.auth.schemas import GoogleAuthRequest, LoginRequest, TokenResponse
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.core.security import create_access_token
+
+# 🟢 IMPORTS PARA SESIÓN ACTIVA Y RUTAS PROTEGIDAS
+from app.users.dependencies import get_current_user
+from app.users.models import User
+from app.users.schemas import UserResponse
 
 # Router propio para el dominio de autenticación
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -51,8 +56,7 @@ async def login_local(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La cuenta de usuario se encuentra inactiva o suspendida.",
         )
-
-    # Generamos el JWT pasando el ID del usuario en la propiedad 'sub' (subject)
+    
     access_token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=access_token, token_type="bearer")
 
@@ -88,13 +92,28 @@ async def login_google(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La cuenta de usuario se encuentra inactiva o suspendida.",
         )
-
-    # Emite nuestro propio JWT para que el cliente navegue por la API
+    
     access_token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=access_token, token_type="bearer")
 
+# --- 3. ENDPOINT: OBTENER PERFIL DE SESIÓN ACTIVA (/me) ---
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener perfil de la sesión activa",
+    description="Devuelve la información del usuario autenticado mediante el token JWT enviado en el encabezado.",
+)
+async def read_session_me(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Endpoint protegido para consultar los datos del usuario logueado en la aplicación.
+    """
+    return current_user
 
-# --- 3. ENDPOINT: LOGOUT (Invalidación en Redis) ---
+
+# --- 4. ENDPOINT: LOGOUT (Invalidación en Redis) ---
 @router.post(
     "/logout",
     status_code=status.HTTP_200_OK,
@@ -102,12 +121,11 @@ async def login_google(
     description="Invalida el token JWT agregándolo a la lista negra (Blacklist) en Redis.",
 )
 async def logout(
-    # Nota: Más adelante inyectaremos la dependencia get_current_user para extraer
-    # el token activo directamente del encabezado Authorization: Bearer <token>
+    current_user: User = Depends(get_current_user),
     redis: Redis = Depends(get_redis),
 ) -> dict[str, str]:
     """
     Endpoint para revocar la sesión activa registrando la firma del token en Redis.
     """
-    # Lógica de revocación ejecutada tras verificar el encabezado de autorización
+    # Aquí iría la lógica para agregar el token a la lista negra en Redis
     return {"message": "Sesión cerrada exitosamente."}

@@ -44,6 +44,9 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    dns: #  AÑADIDO: Fuerz la resolución DNS hacia servidores públicos (Google / Cloudflare)
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
