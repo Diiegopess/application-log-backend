@@ -1,58 +1,95 @@
-"""
-Punto de Entrada Principal de la Aplicación FastAPI.
-"""
+
+#Punto de Entrada Principal de la Aplicación FastAPI.
+
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.api_router import api_router
-from app.core.database import Base, engine
+from app.api.v1.api_router import api_router
+from app.db.database import Base, engine
+from app.core.handlers import register_exception_handlers
 
-# Importar los modelos para que SQLAlchemy 'sepa' que la tabla 'users' existe
-# antes de llamar a create_all.
+# Importamos los modelos para que el 'metadata' de SQLAlchemy los reconozca
+# y pueda generar las tablas automáticamente durante el evento de inicio.
 import app.users.models  # noqa: F401
 
+
+# ==============================================================================
+# 1. GESTIÓN DEL CICLO DE VIDA (LIFESPAN)
+# ==============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-  # CÓDIGO DE INICIO (STARTUP):
-  # Crea las tablas definidas en los modelos si aún no existen en PostgreSQL
-  async with engine.begin() as conn:
-    await conn.run_sync(Base.metadata.create_all)
+    """
+    Administra los eventos de inicio (startup) y apagado (shutdown) del servidor.
+    Reemplaza los antiguos eventos '@app.on_event("startup")' de versiones previas.
+    """
+    # --------------------------------------------------------------------------
+    # FASE DE INICIO: Se ejecuta una sola vez antes de recibir peticiones
+    # --------------------------------------------------------------------------
+    async with engine.begin() as conn:
+        # Crea las tablas en PostgreSQL si aún no existen
+        await conn.run_sync(Base.metadata.create_all)
 
-  yield  # ⏸️ La aplicación queda corriendo y aceptando peticiones
+    yield  # ⏸️ El servidor queda activo y listo para atender solicitudes HTTP
 
-  # CÓDIGO DE CIERRE (SHUTDOWN):
-  # Aquí se pueden cerrar conexiones a bases de datos o clientes como Redis si es necesario.
+    # --------------------------------------------------------------------------
+    # FASE DE CIERRE: Se ejecuta de forma segura cuando se detiene el contenedor
+    # --------------------------------------------------------------------------
+    # Liberar conexiones activas de PostgreSQL y Redis al apagar
+    await engine.dispose()
 
+
+# ==============================================================================
+# 2. INSTANCIA PRINCIPAL DE FASTAPI
+# ==============================================================================
 app = FastAPI(
     title="App_Log API",
     version="1.0.0",
-    description="API para la gestión de logs y autenticación de usuarios",
+    description="API para la gestión de logs, hardening y autenticación de usuarios.",
     lifespan=lifespan,
 )
 
-# ------------------------------------------------------------------
-# Configuración de CORS (Cross-Origin Resource Sharing)
-# Autoriza a las aplicaciones Frontend (React en puerto 5173 / 5174)
-# ------------------------------------------------------------------
+
+# ==============================================================================
+# 3. POLÍTICA DE SEGURIDAD CORS (Cross-Origin Resource Sharing)
+# ==============================================================================
+# Define qué orígenes (direcciones de frontend) tienen permiso para consumir la API
 origins = [
-    "http://localhost:5173",
+    "http://localhost:5173",  # Servidor de desarrollo local (Vite/React)
     "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite GET, POST, PUT, DELETE, OPTIONS, etc.
-    allow_headers=["*"],  # Permite cabeceras como Authorization, Content-Type, etc.
+    allow_origins=origins,       # Dominios autorizados
+    allow_credentials=True,      # Permite envío de cookies y cabeceras de autorización
+    allow_methods=["*"],         # Permite todos los verbos HTTP (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],         # Permite todas las cabeceras estándar y personalizadas
 )
 
-# Monta todos los endpoints bajo la versión 1 (/api/v1)
+
+# ==============================================================================
+# 4. MANEJO CENTRALIZADO DE EXCEPCIONES
+# ==============================================================================
+# Intercepta cualquier AppException o error imprevisto y devuelve respuestas JSON uniformes
+register_exception_handlers(app)
+
+
+# ==============================================================================
+# 5. MONTAJE DE RUTAS Y HEALTH CHECK
+# ==============================================================================
+# Monta todas las rutas de negocio bajo el prefijo global /api/v1
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Health Check"])
 async def root():
-    return {"message": "API App_Log operativa correctamente"}
+    """
+    Endpoint base para verificar la disponibilidad inmediata del servicio.
+    """
+    return {
+        "status": "healthy",
+        "message": "API App_Log operativa correctamente",
+        "version": "1.0.0",
+    }
