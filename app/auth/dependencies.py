@@ -1,62 +1,51 @@
 """
-Módulo de Inyección de Dependencias para el Dominio de Usuarios.
+Módulo de Dependencias para el Dominio de Autenticación.
 
-Proporciona resolvedores de dependencias para FastAPI, encargados de
-extraer el token Bearer, validar la firma y recuperar la entidad User activa.
+Provee inyectores para:
+- Extracción de metadatos de auditoría (IP del cliente y User-Agent).
+- Instanciación del AuthService con la sesión de BD y el Broker inyectados.
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.db.database import get_db
-from app.core.security import decode_access_token
-from app.users import service as user_service
-from app.users.models import User
-
-# Esquema OAuth2 Bearer que indica a Swagger y a FastAPI de dónde extraer el token
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login"
-)
+from app.auth.service import AuthService
+from app.core.events.base import EventMetadata
+from app.core.events.interfaces import IEventPublisher
+from app.infrastructure.brokers.factory import get_event_publisher
+from app.infrastructure.db.database import get_db
 
 
-async def get_current_user(
-    db: AsyncSession = Depends(get_db),
-    token: str = Depends(oauth2_scheme),
-) -> User:
+def get_event_metadata(request: Request) -> EventMetadata:
     """
-    Inyector de dependencia para rutas protegidas.
-
-    Decodifica el JWT, extrae el ID del usuario y consulta la base de datos
-    para retornar la instancia del usuario autenticado.
+    Extrae la IP real y el User-Agent desde las cabeceras HTTP
+    para trazabilidad y auditoría forense.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales o el token ha expirado.",
-        headers={"WWW-Authenticate": "Bearer"},
+    # 1. Resolver la IP real considerando proxies inversos / Cloudflare
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        # El primer elemento de la lista es la IP original del cliente
+        client_ip = forwarded_for.split(",")[0].strip()
+    elif request.client and request.client.host:
+        client_ip = request.client.host
+    else:
+        client_ip = "unknown"
+
+    # 2. Obtener el User-Agent
+    user_agent = request.headers.get("user-agent", "unknown")
+
+    return EventMetadata(
+        ip_address=client_ip,
+        user_agent=user_agent
     )
 
-    # 1. Decodifica el token sin tocar la BD
-    payload = decode_access_token(token)
-    if not payload:
-        raise credentials_exception
 
-    # 2. Extrae el ID del usuario del claim 'sub'
-    user_id: str | None = payload.get("sub")
-    if not user_id:
-        raise credentials_exception
-
-    # 3. Consulta la base de datos
-    user = await user_service.get_by_id(db, user_id=int(user_id))
-    if not user:
-        raise credentials_exception
-
-    # 4. Verifica el estado de la cuenta
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La cuenta de usuario se encuentra inactiva o suspendida.",
-        )
-
-    return user
+def get_auth_service(
+    db: AsyncSession = Depends(get_db),
+    publisher: IEventPublisher = Depends(get_event_publisher),
+) -> AuthService:
+    """
+    Inyector de dependencia que construye el AuthService con
+    la sesión de BD y el publicador de eventos listos.
+    """
+    return AuthService(db=db, publisher=publisher)

@@ -1,29 +1,20 @@
-"""
-Módulo de Excepciones Base del Core.
-
-Define la clase base 'AppException' de la cual heredarán TODAS las
-excepciones de dominio de la aplicación (Auth, Devices, Audits, etc.).
-"""
-
-from typing import Any, Optional
+# app/core/exceptions.py
+from typing import Any
+from fastapi import status
 
 
 class AppException(Exception):
-    """
-    Excepción base para todos los errores de negocio de la aplicación.
-    
-    Permite que cualquier servicio levante una excepción con un mensaje claro,
-    un código de estado HTTP adecuado y un código de error de texto predecible.
-    """
+    """Excepción base para todos los dominios del sistema."""
+
     def __init__(
         self,
         message: str,
-        status_code: int = 400,
+        status_code: int = status.HTTP_400_BAD_REQUEST,
         error_code: str = "BAD_REQUEST",
-        details: Optional[Any] = None,
+        details: Any | None = None,
     ):
         self.message = message
         self.status_code = status_code
         self.error_code = error_code
         self.details = details
-        super().__init__(message)
+        super().__init__(self.message)

@@ -1,94 +1,79 @@
 """
-Módulo de Endpoints HTTP para el Dominio de Usuarios.
-
-Define las rutas para la administración y gestión CRUD de usuarios.
+Módulo de Routers HTTP para el Dominio de Usuarios.
 """
-from typing import Sequence
-from fastapi import APIRouter, Depends, Query, status
+
+from typing import Any, List
+import uuid
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
-
+from app.infrastructure.db.database import get_db
 from app.users import service as user_service
+from app.users.dependencies import get_current_superuser, get_current_user
 from app.users.models import User
-from app.users.schemas import (
-    UserCreate,
-    UserResponse,
-    UserUpdateAdmin,
-)
-
+from app.users.schemas import UserResponse, UserUpdate, UserUpdateAdmin
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# --- 1. ENDPOINT: REGISTRAR USUARIO (Administración) ---
-@router.post(
-    "/",
+# --- 1. CONSULTAR MI PROPIO PERFIL ---
+@router.get(
+    "/me",
     response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Registrar usuario local",
-    description="Crea un nuevo usuario en la base de datos tras verificar la unicidad del correo.",
+    status_code=status.HTTP_200_OK,
+    summary="Obtener perfil actual",
 )
-async def create_user(
-    user_in: UserCreate,
+async def read_current_user(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    return current_user
+
+
+# --- 2. ACTUALIZAR MI PROPIO PERFIL ---
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Actualizar perfil propio",
+)
+async def update_current_user(
+    user_in: UserUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> User:
-    """
-    Recibe los datos del usuario y delega la creación al servicio de negocio.
-    """
-    return await user_service.create_user(db, user_in=user_in)
+) -> Any:
+    updated_user = await user_service.update_user(
+        db=db, user_id=current_user.id, user_in=user_in
+    )
+    return updated_user
 
 
-# --- 2. ENDPOINT: LISTAR USUARIOS PAGINADOS ---
+# --- 3. LISTAR USUARIOS (ADMIN) ---
 @router.get(
     "/",
-    response_model=list[UserResponse],
-    summary="Listar usuarios paginados",
-    description="Retorna una colección de usuarios aplicando paginación por desplazamiento (skip/limit).",
+    response_model=List[UserResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar usuarios (Admin)",
 )
-async def read_users(
-    skip: int = Query(default=0, ge=0, description="Registros a omitir"),
-    limit: int = Query(
-        default=100, ge=1, le=100, description="Límite máximo de registros"
-    ),
+async def list_users(
+    skip: int = 0,
+    limit: int = 50,
+    _: User = Depends(get_current_superuser),
     db: AsyncSession = Depends(get_db),
-) -> Sequence[User]:
-    """
-    Consulta la lista paginada de usuarios registrados.
-    """
-    return await user_service.get_multi(db, skip=skip, limit=limit)
+) -> Any:
+    return await user_service.get_multi(db=db, skip=skip, limit=limit)
 
 
-# --- 3. ENDPOINT: OBTENER USUARIO POR ID ---
-@router.get(
-    "/{user_id}",
-    response_model=UserResponse,
-    summary="Obtener usuario por ID",
-    description="Busca y retorna la ficha completa de un usuario por su clave primaria.",
-)
-async def read_user_by_id(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """
-    Recupera el perfil de un usuario específico. Lanza 404 si no existe.
-    """
-    return await user_service.get_by_id_or_fail(db, user_id=user_id)
-
-
-# --- 4. ENDPOINT: ACTUALIZAR USUARIO POR ID ---
+# --- 4. ACTUALIZAR USUARIO COMO ADMIN ---
 @router.patch(
     "/{user_id}",
     response_model=UserResponse,
-    summary="Actualizar usuario por ID",
-    description="Actualiza campos específicos de un usuario existente.",
+    status_code=status.HTTP_200_OK,
+    summary="Modificar usuario por ID (Admin)",
 )
-async def update_user(
-    user_id: int,
+async def admin_update_user(
+    user_id: uuid.UUID,
     user_in: UserUpdateAdmin,
+    _: User = Depends(get_current_superuser),
     db: AsyncSession = Depends(get_db),
-) -> User:
-    """
-    Modifica la información de un usuario validando disponibilidad del correo.
-    """
-    return await user_service.update_user(db, user_id=user_id, user_in=user_in)
+) -> Any:
+    return await user_service.update_user(db=db, user_id=user_id, user_in=user_in)

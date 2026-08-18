@@ -1,28 +1,39 @@
 """
 Módulo de Excepciones del Dominio de Usuarios.
-
-Define los errores específicos para la gestión, consulta y actualización de usuarios.
 """
 
+from typing import Any
 from fastapi import status
 from app.core.exceptions import AppException
 
 
 class UserNotFoundError(AppException):
-    """Lanzada cuando se consulta o actualiza un usuario que no existe."""
-    def __init__(self, user_id: int):
+    """Lanzada cuando un usuario no existe en la base de datos."""
+
+    def __init__(
+        self,
+        message: str = "El usuario solicitado no fue encontrado.",
+        details: Any | None = None,
+    ):
         super().__init__(
-            message=f"El usuario con ID {user_id} no existe.",
+            message=message,
             status_code=status.HTTP_404_NOT_FOUND,
             error_code="USER_NOT_FOUND",
+            details=details,
         )
 
 
-class EmailAlreadyExistsError(AppException):
-    """Lanzada cuando se intenta registrar o actualizar con un email ya en uso."""
-    def __init__(self, email: str):
+class UserAlreadyExistsError(AppException):
+    """Lanzada cuando se intenta crear o actualizar un usuario con un email duplicado."""
+
+    def __init__(
+        self,
+        message: str = "Ya existe un usuario registrado con este correo electrónico.",
+        details: Any | None = None,
+    ):
         super().__init__(
-            message=f"El correo electrónico '{email}' ya se encuentra registrado.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-            error_code="EMAIL_ALREADY_EXISTS",
+            message=message,
+            status_code=status.HTTP_409_CONFLICT,
+            error_code="USER_ALREADY_EXISTS",
+            details=details,
         )

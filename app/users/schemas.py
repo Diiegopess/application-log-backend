@@ -2,9 +2,10 @@
 Módulo de Esquemas Pydantic v2 para el Dominio de Usuarios.
 
 Define las reglas de validación y serialización de datos
-para la entrada y salida de la API en las operaciones del usuario.
+para la entrada y salida de la API en la gestión de perfiles de usuario.
 """
 
+import uuid
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -24,40 +25,42 @@ class UserBase(BaseModel):
         description="Nombre completo opcional del usuario",
     )
     is_active: bool = Field(
-        default=True, description="Indica si la cuenta se encuentra activa"
+        default=True,
+        description="Indica si el perfil se encuentra habilitado",
     )
 
 
-# --- 2. ESQUEMA PARA CREACIÓN LOCAL (Email + Contraseña) ---
-class UserCreate(UserBase):
-    """Esquema para el registro de usuarios mediante credenciales locales."""
+# --- 2. ESQUEMA PARA CREACIÓN INTERNA DE PERFIL ---
+class UserProfileCreate(BaseModel):
+    """Esquema utilizado para aprovisionar el perfil de un usuario vinculado a Auth."""
 
-    password: str = Field(
+    id: uuid.UUID = Field(
         ...,
-        min_length=8,
-        max_length=128,
-        description="Contraseña en texto plano (mínimo 8 caracteres)",
+        description="UUID asignado previamente en auth_credentials",
     )
-
-
-# --- 3. ESQUEMA PARA CREACIÓN VÍA GOOGLE OAUTH ---
-class UserCreateGoogle(UserBase):
-    """Esquema interno para el registro o actualización automática vía Google OAuth 2.0."""
-
-    google_id: str = Field(..., description="ID único entregado por Google")
-    picture_url: str | None = Field(
-        default=None, description="URL de la imagen de perfil de Google"
-    )
-
-
-# --- 4. ESQUEMA PARA ACTUALIZACIÓN (PATCH/PUT) ---
-class UserUpdate(BaseModel):
-    """Esquema de campos opcionales para actualizar la información de un usuario."""
-
-    email: EmailStr | None = Field(default=None)
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
     full_name: str | None = Field(default=None, max_length=255)
-    password: str | None = Field(default=None, min_length=8, max_length=128)
+    is_active: bool = Field(default=True)
+    is_superuser: bool = Field(default=False)
+
+
+# --- 3. ESQUEMA PARA ACTUALIZACIÓN DE PERFIL (PATCH/PUT) ---
+class UserUpdate(BaseModel):
+    """Esquema de campos permitidos para que el usuario actualice su propio perfil."""
+
+    full_name: str | None = Field(default=None, max_length=255)
+    email: EmailStr | None = Field(default=None)
+
+
+# --- 4. ESQUEMA PARA ACTUALIZACIÓN ADMINISTRATIVA ---
+class UserUpdateAdmin(UserUpdate):
+    """Esquema extendido para que un administrador modifique roles y estados."""
+
     is_active: bool | None = Field(default=None)
+    is_superuser: bool | None = Field(
+        default=None,
+        description="Permite otorgar o revocar permisos de superusuario",
+    )
 
 
 # --- 5. ESQUEMA DE RESPUESTA DE LA API (Response Model) ---
@@ -65,28 +68,12 @@ class UserResponse(UserBase):
     """
     Esquema público retornado por la API hacia los clientes HTTP.
     
-    Excluye campos sensibles como 'hashed_password'.
+    Alineado estrictamente con el modelo SQLAlchemy de 'users'.
     """
 
-    id: int
+    id: uuid.UUID
     is_superuser: bool
-    google_id: str | None = None
-    picture_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
-    # Configuración de Pydantic v2
-    # from_attributes=True permite que Pydantic lea directamente las instancias de modelos de SQLAlchemy.
-    model_config = ConfigDict(from_attributes=True) 
-
-    # --- 6. ESQUEMA PARA ACTUALIZACIÓN POR PARTE DE UN ADMINISTRADOR ---
-class UserUpdateAdmin(UserUpdate):
-    """
-    Esquema extendido para que los administradores puedan actualizar 
-    roles o permisos privilegiados como 'is_superuser'.
-    """
-
-    is_superuser: bool | None = Field(
-        default=None, 
-        description="Permite otorgar o revocar permisos de superusuario"
-    )
+    model_config = ConfigDict(from_attributes=True)

@@ -1,39 +1,58 @@
-"""
-Módulo de Excepciones del Dominio de Autenticación.
+"""Módulo de Excepciones del Dominio de Autenticación.
 
-Define las excepciones específicas para flujos de login local,
-Google OAuth, estado de cuenta y validación de tokens.
+Define las excepciones específicas para los flujos de login local y Google OAuth.
 """
 
+from typing import Any
 from fastapi import status
 from app.core.exceptions import AppException
 
 
 class InvalidCredentialsError(AppException):
-    """Lanzada cuando el usuario o la contraseña local no coinciden."""
-    def __init__(self, message: str = "Correo electrónico o contraseña incorrectos."):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            error_code="INVALID_CREDENTIALS",
-        )
+  """Lanzada cuando las credenciales ingresadas son incorrectas."""
+
+  def __init__(
+      self,
+      message: str = "Correo electrónico o contraseña incorrectos.",
+      details: Any | None = None,
+  ):
+    super().__init__(
+        message=message,
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        error_code="INVALID_CREDENTIALS",
+        details=details,
+    )
 
 
 class InactiveUserError(AppException):
-    """Lanzada cuando un usuario intenta iniciar sesión pero su cuenta está deshabilitada."""
-    def __init__(self, message: str = "La cuenta de usuario se encuentra inactiva o suspendida."):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_403_FORBIDDEN,  # 403 Forbidden es más semántico para cuentas bloqueadas
-            error_code="USER_INACTIVE",
-        )
+  """Lanzada cuando el usuario intenta autenticarse pero su cuenta está deshabilitada."""
+
+  def __init__(
+      self,
+      message: str = "La cuenta se encuentra inactiva o suspendida.",
+      details: Any | None = None,
+  ):
+    super().__init__(
+        message=message,
+        status_code=status.HTTP_403_FORBIDDEN,
+        error_code="USER_INACTIVE",
+        details=details,
+    )
 
 
 class InvalidGoogleTokenError(AppException):
-    """Lanzada cuando el token de Google es inválido, expiró o no pudo ser verificado."""
-    def __init__(self, message: str = "El token de Google es inválido, ha expirado o no se pudo verificar."):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            error_code="INVALID_GOOGLE_TOKEN",
-        )
+  """Lanzada cuando el ID Token de Google no es válido o expiró."""
+
+  def __init__(
+      self,
+      message: str = (
+          "El token de Google es inválido, ha expirado o no se pudo verificar."
+      ),
+      details: Any | None = None,
+  ):
+    super().__init__(
+        message=message,
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        error_code="INVALID_GOOGLE_TOKEN",
+        details=details,
+    )
