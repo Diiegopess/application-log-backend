@@ -8,12 +8,11 @@ sin consultar la base de datos ni depender de ningún modelo ORM de negocio.
 import uuid
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import ValidationError
+import jwt
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError
-from app.core.schemas import TokenPayload
-from app.core.security import decode_access_token
+from app.core.security import decode_token
 
 # Esquema OAuth2 Bearer para OpenAPI / Swagger UI
 oauth2_scheme = OAuth2PasswordBearer(
@@ -31,21 +30,15 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
     Raises:
         UnauthorizedError: Si el token es inválido, expiró o el ID es corrupto.
     """
-    payload = decode_access_token(token)
-    if not payload:
-        raise UnauthorizedError(message="Token inválido o expirado.")
-
     try:
-        token_data = TokenPayload(**payload)
-        if not token_data.sub:
+        payload = decode_token(token)
+        user_id_str: str | None = payload.get("sub")
+        if not user_id_str:
             raise UnauthorizedError(
                 message="Token malformado: falta identificador de usuario."
             )
-        # Parseo seguro a UUID
-        user_id = uuid.UUID(token_data.sub)
-    except (ValidationError, ValueError, TypeError):
+        return uuid.UUID(user_id_str)
+    except (jwt.PyJWTError, ValueError, TypeError):
         raise UnauthorizedError(
-            message="Identificador de usuario inválido en el token."
+            message="Token de autenticación inválido, expirado o malformado."
         )
-
-    return user_id

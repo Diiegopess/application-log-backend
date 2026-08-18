@@ -3,7 +3,7 @@ version: "3.8"
 services:
   # --- SERVICIO 1: Base de Datos PostgreSQL ---
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: app_log_postgres
     restart: always
     environment:
@@ -15,16 +15,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-app_log_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # --- SERVICIO 2: Base de Datos Redis (Blacklist / Cache) ---
+  # --- SERVICIO 2: Redis (Streams + Cache) ---
   redis:
     image: redis:7-alpine
     container_name: app_log_redis
     restart: always
+    command: redis-server --appendonly yes  # Persistencia AOF para eventos en Redis Streams
     ports:
       - "6379:6379"
     volumes:
@@ -44,15 +45,17 @@ services:
     restart: always
     ports:
       - "8000:8000"
-    dns: #  AÑADIDO: Fuerz la resolución DNS hacia servidores públicos (Google / Cloudflare)
+    dns:
       - 8.8.8.8
       - 1.1.1.1
     env_file:
       - .env
     environment:
-      # Sobrescribimos los hosts para apuntar a los contenedores internos
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
+      # Sobrescribimos las URLs para la red interna de Docker
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app_log_db}"
+      REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - ./app:/app/app  # Recarga en vivo al modificar código local
     depends_on:
       postgres:
         condition: service_healthy
