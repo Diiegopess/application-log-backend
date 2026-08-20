@@ -211,6 +211,7 @@ class AuthService:
                 "auth_provider": "google",
             },
         )
+        # Al final de authenticate_google_user:
         await self.publisher.publish(stream_or_topic=settings.AUTH_STREAM_NAME, event=login_event)
 
-        return account.id
+        return account  # Retornamos el objeto AuthCredential completo

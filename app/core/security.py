@@ -20,18 +20,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 
-def create_access_token(subject: str | Any, expires_delta: Optional[timedelta] = None) -> str:
-    """Crea un JWT de acceso con tiempo de expiración."""
+def create_access_token(
+    subject: str | Any,
+    expires_delta: Optional[timedelta] = None,
+    extra_claims: Optional[dict[str, Any]] = None,
+) -> str:
+    """Crea un JWT de acceso con tiempo de expiración y claims personalizados."""
+    now = datetime.now(timezone.utc)
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
     to_encode = {
+        "iat": now,
         "exp": expire,
         "sub": str(subject),
-        "type": "access"
+        "type": "access",
     }
+    
+    if extra_claims:
+        to_encode.update(extra_claims)
+
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

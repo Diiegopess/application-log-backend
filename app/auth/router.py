@@ -60,16 +60,19 @@ async def login_local(
     auth_service: AuthService = Depends(get_auth_service),
     metadata: EventMetadata = Depends(get_event_metadata),
 ) -> Any:
-    """
-    Autentica al usuario mediante email y contraseña.
-    """
-    user_id: uuid.UUID = await auth_service.authenticate_user(
+    account = await auth_service.authenticate_user(
         email=credentials.email,
         password=credentials.password,
         metadata=metadata,
     )
     
-    access_token = create_access_token(subject=str(user_id))
+    access_token = create_access_token(
+        subject=str(account.id),
+        extra_claims={
+            "email": account.email,
+            "is_superuser": getattr(account, "is_superuser", False),
+        },
+    )
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 
@@ -86,15 +89,18 @@ async def login_google(
     auth_service: AuthService = Depends(get_auth_service),
     metadata: EventMetadata = Depends(get_event_metadata),
 ) -> Any:
-    """
-    Autentica o registra un usuario mediante Google OAuth 2.0.
-    """
-    user_id: uuid.UUID = await auth_service.authenticate_google_user(
+    account = await auth_service.authenticate_google_user(
         token=google_data.id_token,
         metadata=metadata,
     )
     
-    access_token = create_access_token(subject=str(user_id))
+    access_token = create_access_token(
+        subject=str(account.id),
+        extra_claims={
+            "email": account.email,
+            "is_superuser": getattr(account, "is_superuser", False),
+        },
+    )
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 
