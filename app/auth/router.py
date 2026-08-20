@@ -69,10 +69,12 @@ async def login_local(
     access_token = create_access_token(
         subject=str(account.id),
         extra_claims={
+
             "email": account.email,
-            "is_superuser": getattr(account, "is_superuser", False),
+            
         },
     )
+
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 
