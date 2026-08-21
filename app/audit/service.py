@@ -2,6 +2,7 @@
 Módulo de Servicios para el Dominio de Auditoría.
 """
 
+from datetime import datetime
 from typing import Sequence
 import uuid
 from sqlalchemy import desc, select
@@ -37,16 +38,24 @@ async def get_audit_logs(
     limit: int = 50,
     event_type: str | None = None,
     user_id: uuid.UUID | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
 ) -> Sequence[AuditLog]:
     """
     Obtiene el historial de auditoría con filtros opcionales ordenado descendentemente.
     """
-    stmt = select(AuditLog).order_by(desc(AuditLog.occurred_at)).offset(skip).limit(limit)
+    stmt = select(AuditLog)
 
     if event_type:
         stmt = stmt.where(AuditLog.event_type == event_type)
     if user_id:
         stmt = stmt.where(AuditLog.user_id == user_id)
+    if from_date:
+        stmt = stmt.where(AuditLog.occurred_at >= from_date)
+    if to_date:
+        stmt = stmt.where(AuditLog.occurred_at <= to_date)
+
+    stmt = stmt.order_by(desc(AuditLog.occurred_at)).offset(skip).limit(limit)
 
     result = await db.execute(stmt)
     return result.scalars().all()

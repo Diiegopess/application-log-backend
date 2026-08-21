@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # --- Broker de Eventos ---
-    BROKER_TYPE: str = "REDIS"  # Opciones: REDIS, RABBITMQ, KAFKA
+    BROKER_TYPE: str = "REDIS"
     AUTH_STREAM_NAME: str = "stream:auth_events"
     SYSTEM_STREAM_NAME: str = "stream:system_events"
     
@@ -31,6 +31,11 @@ class Settings(BaseSettings):
 
     # --- Autenticación Externa ---
     GOOGLE_CLIENT_ID: str = ""
+
+    # --- Superusuario Inicial (Seeding) ---
+    FIRST_SUPERUSER_EMAIL: str = "admin@example.com"
+    FIRST_SUPERUSER_PASSWORD: str = "admin123"
+    FIRST_SUPERUSER_FULL_NAME: str = "Administrador del Sistema"
 
     model_config = SettingsConfigDict(
         env_file=".env",

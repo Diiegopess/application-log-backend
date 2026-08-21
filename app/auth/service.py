@@ -103,7 +103,7 @@ class AuthService:
         email: str,
         password: str,
         metadata: EventMetadata,
-    ) -> uuid.UUID:
+    ) -> AuthCredential:  # Retornamos la entidad completa
         """
         Autentica credenciales locales y publica el evento 'auth.login_success'.
         """
@@ -129,7 +129,7 @@ class AuthService:
         )
         await self.publisher.publish(stream_or_topic=settings.AUTH_STREAM_NAME, event=event)
 
-        return account.id
+        return account  # <--- Retornamos 'account' completo
 
     async def authenticate_google_user(
         self,

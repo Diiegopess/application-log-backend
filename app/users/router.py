@@ -4,19 +4,59 @@ Módulo de Routers HTTP para el Dominio de Usuarios.
 
 from typing import Any, List
 import uuid
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events.base import EventMetadata
+from app.core.events.interfaces import IEventPublisher
+from app.infrastructure.brokers.redis_producer import RedisStreamPublisher
+from app.infrastructure.cache.redis_cache import get_redis_cache_client
 from app.infrastructure.db.database import get_db
 from app.users import service as user_service
 from app.users.dependencies import get_current_superuser, get_current_user
 from app.users.models import User
-from app.users.schemas import UserResponse, UserUpdate, UserUpdateAdmin
+from app.users.schemas import (
+    UserCreateAdmin,
+    UserResponse,
+    UserUpdate,
+    UserUpdateAdmin,
+)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# --- 1. CONSULTAR MI PROPIO PERFIL ---
+def get_event_publisher() -> IEventPublisher:
+    return RedisStreamPublisher(redis_client=get_redis_cache_client())
+
+
+# --- 1. REGISTRAR USUARIO COMO ADMIN ---
+@router.post(
+    "/",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un usuario nuevo (Admin)",
+)
+async def admin_create_user(
+    request: Request,
+    user_in: UserCreateAdmin,
+    current_admin: User = Depends(get_current_superuser),
+    publisher: IEventPublisher = Depends(get_event_publisher),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    metadata = EventMetadata(
+        user_id=str(current_admin.id),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return await user_service.admin_create_user(
+        db=db,
+        user_in=user_in,
+        metadata=metadata,
+        publisher=publisher,
+    )
+
+
+# --- 2. CONSULTAR MI PROPIO PERFIL ---
 @router.get(
     "/me",
     response_model=UserResponse,
@@ -29,7 +69,7 @@ async def read_current_user(
     return current_user
 
 
-# --- 2. ACTUALIZAR MI PROPIO PERFIL ---
+# --- 3. ACTUALIZAR MI PROPIO PERFIL ---
 @router.patch(
     "/me",
     response_model=UserResponse,
@@ -41,13 +81,12 @@ async def update_current_user(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    updated_user = await user_service.update_user(
+    return await user_service.update_user(
         db=db, user_id=current_user.id, user_in=user_in
     )
-    return updated_user
 
 
-# --- 3. LISTAR USUARIOS (ADMIN) ---
+# --- 4. LISTAR USUARIOS (ADMIN) ---
 @router.get(
     "/",
     response_model=List[UserResponse],
@@ -63,7 +102,7 @@ async def list_users(
     return await user_service.get_multi(db=db, skip=skip, limit=limit)
 
 
-# --- 4. ACTUALIZAR USUARIO COMO ADMIN ---
+# --- 5. ACTUALIZAR USUARIO COMO ADMIN ---
 @router.patch(
     "/{user_id}",
     response_model=UserResponse,

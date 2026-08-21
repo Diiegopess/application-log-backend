@@ -1,8 +1,5 @@
 """
 Módulo de Esquemas Pydantic v2 para el Dominio de Usuarios.
-
-Define las reglas de validación y serialización de datos
-para la entrada y salida de la API en la gestión de perfiles de usuario.
 """
 
 import uuid
@@ -12,8 +9,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # --- 1. ESQUEMA BASE (Atributos Compartidos) ---
 class UserBase(BaseModel):
-    """Atributos comunes que comparten otros esquemas de usuario."""
-
     email: EmailStr = Field(
         ...,
         description="Correo electrónico válido del usuario",
@@ -30,10 +25,20 @@ class UserBase(BaseModel):
     )
 
 
-# --- 2. ESQUEMA PARA CREACIÓN INTERNA DE PERFIL ---
-class UserProfileCreate(BaseModel):
-    """Esquema utilizado para aprovisionar el perfil de un usuario vinculado a Auth."""
+# --- 2. ESQUEMA PARA CREACIÓN ADMINISTRATIVA DE USUARIOS ---
+class UserCreateAdmin(BaseModel):
+    """Esquema de entrada para que un administrador registre usuarios con credenciales iniciales."""
 
+    email: EmailStr
+    password: str = Field(..., min_length=6, description="Contraseña inicial del usuario")
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    is_active: bool = Field(default=True)
+    is_superuser: bool = Field(default=False)
+
+
+# --- 3. ESQUEMA PARA CREACIÓN INTERNA DE PERFIL ---
+class UserProfileCreate(BaseModel):
     id: uuid.UUID = Field(
         ...,
         description="UUID asignado previamente en auth_credentials",
@@ -44,18 +49,14 @@ class UserProfileCreate(BaseModel):
     is_superuser: bool = Field(default=False)
 
 
-# --- 3. ESQUEMA PARA ACTUALIZACIÓN DE PERFIL (PATCH/PUT) ---
+# --- 4. ESQUEMA PARA ACTUALIZACIÓN DE PERFIL (PATCH/PUT) ---
 class UserUpdate(BaseModel):
-    """Esquema de campos permitidos para que el usuario actualice su propio perfil."""
-
     full_name: str | None = Field(default=None, max_length=255)
     email: EmailStr | None = Field(default=None)
 
 
-# --- 4. ESQUEMA PARA ACTUALIZACIÓN ADMINISTRATIVA ---
+# --- 5. ESQUEMA PARA ACTUALIZACIÓN ADMINISTRATIVA ---
 class UserUpdateAdmin(UserUpdate):
-    """Esquema extendido para que un administrador modifique roles y estados."""
-
     is_active: bool | None = Field(default=None)
     is_superuser: bool | None = Field(
         default=None,
@@ -63,14 +64,8 @@ class UserUpdateAdmin(UserUpdate):
     )
 
 
-# --- 5. ESQUEMA DE RESPUESTA DE LA API (Response Model) ---
+# --- 6. ESQUEMA DE RESPUESTA DE LA API ---
 class UserResponse(UserBase):
-    """
-    Esquema público retornado por la API hacia los clientes HTTP.
-    
-    Alineado estrictamente con el modelo SQLAlchemy de 'users'.
-    """
-
     id: uuid.UUID
     is_superuser: bool
     created_at: datetime

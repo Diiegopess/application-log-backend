@@ -1,8 +1,5 @@
 """
 Módulo de Consumo en Segundo Plano basado en Redis Streams.
-
-Implementa la lectura continua mediante Consumer Groups (XREADGROUP) y confirma
-el procesamiento exitoso de los mensajes (XACK) con sesiones aisladas de BD.
 """
 
 import asyncio
@@ -12,6 +9,7 @@ from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
 from app.audit.handlers import handle_audit_event
+from app.auth.handlers import handle_user_created_by_admin_event
 from app.core.config import settings
 from app.core.events.base import DomainEvent, EventMetadata
 from app.infrastructure.cache.redis_cache import get_redis_cache_client
@@ -37,14 +35,13 @@ class RedisStreamConsumer:
         for stream in streams:
             for group in groups:
                 try:
-                    # MKSTREAM=True crea el stream automáticamente si no existe
                     await self.redis.xgroup_create(
                         name=stream, groupname=group, id="0", mkstream=True
                     )
                     logger.info(f"[CONSUMER_INIT] Grupo '{group}' creado en stream '{stream}'.")
                 except ResponseError as e:
                     if "BUSYGROUP" in str(e):
-                        pass  # El grupo ya existía, comportamiento esperado
+                        pass
                     else:
                         logger.error(f"[CONSUMER_ERROR] Error al crear grupo {group}: {str(e)}")
 
@@ -56,8 +53,6 @@ class RedisStreamConsumer:
 
         while self.is_running:
             try:
-                # 1. Leer mensajes pendientes o nuevos con XREADGROUP
-                # Bloquea hasta 2000 ms esperando nuevos eventos
                 response = await self.redis.xreadgroup(
                     groupname=settings.USERS_CONSUMER_GROUP,
                     consumername=self.consumer_name,
@@ -82,9 +77,8 @@ class RedisStreamConsumer:
                 await asyncio.sleep(1)
 
     async def _process_message(self, stream_name: str, message_id: str, raw_data: dict) -> None:
-        """Parsea el evento y despacha a los manejadores con una sesión de BD dedicada."""
+        """Parsea el evento y despacha a los manejadores correspondientes."""
         try:
-            # 1. Reconstruir metadatos y payload desde el formato de Redis
             metadata_dict = json.loads(raw_data.get("metadata", "{}"))
             payload_dict = json.loads(raw_data.get("payload", "{}"))
 
@@ -96,16 +90,19 @@ class RedisStreamConsumer:
                 payload=payload_dict,
             )
 
-            # 2. Procesar con sesión de base de datos aislada
             async with AsyncSessionLocal() as db:
-                # A) Consumidor de Auditoría (procesa todos los eventos)
+                # 1. Auditoría: registra cronológicamente cualquier evento
                 await handle_audit_event(event=event, db=db)
 
-                # B) Consumidor de Usuarios (procesa registros)
+                # 2. Despacho a Users si viene de autoregistro
                 if event.event_type == "auth.user_registered":
                     await handle_user_registered_event(event=event, db=db)
 
-            # 3. Confirmar procesamiento en Redis (XACK)
+                # 3. Despacho a Auth si viene de creación administrativa
+                elif event.event_type == "user.created_by_admin":
+                    await handle_user_created_by_admin_event(event=event, db=db)
+
+            # Confirmar procesamiento en Redis (XACK)
             await self.redis.xack(stream_name, settings.USERS_CONSUMER_GROUP, message_id)
 
         except Exception as e:
@@ -115,7 +112,7 @@ class RedisStreamConsumer:
             )
 
     async def stop(self) -> None:
-        """Detiene el consumidor y libera recursos de red."""
+        """Detiene el consumidor y libera recursos de conexión."""
         self.is_running = False
         await self.redis.aclose()
         logger.info("[CONSUMER_STOPPED] Worker de Redis Streams apagado correctamente.")
