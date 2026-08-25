@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.base import EventMetadata
 from app.core.events.interfaces import IEventPublisher
-from app.infrastructure.brokers.redis_producer import RedisStreamPublisher
+from app.infrastructure.brokers.redis_stream import RedisStreamPublisher
 from app.infrastructure.cache.redis_cache import get_redis_cache_client
 from app.infrastructure.db.database import get_db
 from app.users import service as user_service
